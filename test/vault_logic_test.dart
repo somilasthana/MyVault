@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myvault/data/account_repository.dart';
 import 'package:myvault/data/key_value_store.dart';
 import 'package:myvault/data/password_generator.dart';
+import 'package:myvault/data/shared_asset.dart';
 import 'package:myvault/data/password_hasher.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/vault_repository.dart';
@@ -33,11 +36,20 @@ void main() {
   }
 
   test('search matches title and notes as a literal phrase', () {
-    final bank = sample(title: 'HDFC Bank', username: 'somila', notes: 'locker');
+    final bank = sample(
+      title: 'HDFC Bank',
+      username: 'somila',
+      notes: 'locker',
+    );
     final mine = sample(id: 'b', title: 'myhdfc');
     final joined = sample(id: 'c', title: 'hdfcbank');
     final spaced = sample(id: 'd', title: 'hd fcoo');
-    final noted = sample(id: 'e', title: 'Rent', username: 'hdfc-user', notes: 'pay hdfc');
+    final noted = sample(
+      id: 'e',
+      title: 'Rent',
+      username: 'hdfc-user',
+      notes: 'pay hdfc',
+    );
     final dotted = sample(id: 'f', title: 'h.fc');
 
     expect(itemMatchesQuery(bank, 'hdfc'), isTrue);
@@ -45,7 +57,10 @@ void main() {
     expect(itemMatchesQuery(joined, 'hdfc'), isTrue);
     expect(itemMatchesQuery(spaced, 'hdfc'), isFalse);
     expect(itemMatchesQuery(noted, 'hdfc'), isTrue);
-    expect(itemMatchesQuery(sample(title: 'Rent', username: 'hdfc-user'), 'hdfc'), isFalse);
+    expect(
+      itemMatchesQuery(sample(title: 'Rent', username: 'hdfc-user'), 'hdfc'),
+      isFalse,
+    );
     expect(itemMatchesQuery(bank, 'h.fc'), isFalse);
     expect(itemMatchesQuery(dotted, 'h.fc'), isTrue);
     expect(itemMatchesQuery(bank, '   '), isTrue);
@@ -53,7 +68,11 @@ void main() {
 
   test('visible rows keep duplicates and put the newest first', () {
     final older = sample(id: 'old', createdAt: DateTime.utc(2020));
-    final newer = sample(id: 'new', title: 'HDFC', createdAt: DateTime.utc(2024));
+    final newer = sample(
+      id: 'new',
+      title: 'HDFC',
+      createdAt: DateTime.utc(2024),
+    );
     final secret = VaultItem(
       id: 'note',
       type: VaultItemType.secret,
@@ -89,10 +108,7 @@ void main() {
       assetSaveBlock(title: 'Rent', password: ''),
       AssetSaveBlock.missingPassword,
     );
-    expect(
-      assetSaveBlock(title: 'Rent', password: ' '),
-      AssetSaveBlock.none,
-    );
+    expect(assetSaveBlock(title: 'Rent', password: ' '), AssetSaveBlock.none);
   });
 
   test('generated passwords stay inside the chosen alphabet', () {
@@ -134,9 +150,7 @@ void main() {
     final first = VaultRepository(store: store, iterations: 1000);
     final saved = await first.open('sunshine-8');
     expect(saved, isEmpty);
-    await first.persist([
-      sample(password: 'vault-secret-xyz', title: 'HDFC'),
-    ]);
+    await first.persist([sample(password: 'vault-secret-xyz', title: 'HDFC')]);
     final raw = await store.read();
     expect(raw, isNotNull);
     expect(raw, isNot(contains('vault-secret-xyz')));
@@ -144,7 +158,10 @@ void main() {
     first.lock();
 
     final second = VaultRepository(store: store, iterations: 1000);
-    await expectLater(second.open('wrong-password'), throwsA(isA<VaultUnreadable>()));
+    await expectLater(
+      second.open('wrong-password'),
+      throwsA(isA<VaultUnreadable>()),
+    );
     final opened = await second.open('sunshine-8');
     expect(opened.single.title, 'HDFC');
     expect(opened.single.password, 'vault-secret-xyz');
@@ -159,7 +176,10 @@ void main() {
       ),
       vaults: VaultRepository(store: store, iterations: 1000),
     );
-    await session.createAccount(email: 'somi@example.com', masterPassword: 'sunshine-8');
+    await session.createAccount(
+      email: 'somi@example.com',
+      masterPassword: 'sunshine-8',
+    );
     expect(await store.read(), isNotNull);
     await session.saveItem(sample());
     expect(session.items, hasLength(1));
@@ -168,5 +188,71 @@ void main() {
     expect(await store.read(), isNull);
     expect(session.items, isEmpty);
     expect(session.hasAccount, isFalse);
+  });
+
+  test('a shared asset stays unreadable without the same key', () async {
+    final item = sample(
+      title: 'Test Account',
+      username: 'somila@gmail.com',
+      password: 'password-1',
+      notes: 'locker hdfc code',
+    );
+    final first = await sealSharedItem(
+      item: item,
+      key: 'share-key-1',
+      iterations: 1000,
+    );
+    final second = await sealSharedItem(
+      item: item,
+      key: 'share-key-1',
+      iterations: 1000,
+    );
+    expect(first, isNot(equals(second)));
+    final text = utf8.decode(first);
+    expect(text, contains('"kind": "myvault-shared-item"'));
+    expect(text, isNot(contains('password-1')));
+    expect(text, isNot(contains('locker hdfc code')));
+    expect(text, isNot(contains('share-key-1')));
+
+    final opened = await openSharedItem(bytes: first, key: 'share-key-1');
+    expect(opened, isA<SharedAssetContents>());
+    final contents = opened as SharedAssetContents;
+    expect(contents.title, 'Test Account');
+    expect(contents.username, 'somila@gmail.com');
+    expect(contents.password, 'password-1');
+    expect(contents.notes, 'locker hdfc code');
+
+    final wrong = await openSharedItem(bytes: first, key: 'share-key-2');
+    expect((wrong as SharedItemUnreadable).wrongKey, isTrue);
+    final junk = await openSharedItem(
+      bytes: Uint8List.fromList(utf8.encode('not a vault file')),
+      key: 'share-key-1',
+    );
+    expect((junk as SharedItemUnreadable).wrongKey, isFalse);
+
+    final secret = VaultItem(
+      id: 'note',
+      type: VaultItemType.secret,
+      title: 'Diary',
+      username: '',
+      password: '',
+      notes: 'quiet',
+      createdAt: DateTime.utc(2026, 1, 2),
+      updatedAt: DateTime.utc(2026, 1, 2),
+    );
+    final sealedSecret = await sealSharedItem(
+      item: secret,
+      key: 'share-key-1',
+      iterations: 1000,
+    );
+    expect(
+      await openSharedItem(bytes: sealedSecret, key: 'share-key-1'),
+      isA<SharedSecretContents>(),
+    );
+    expect(sharedItemFileName('A/B:C'), 'A B C.mvasset');
+    await expectLater(
+      sealSharedItem(item: item, key: 'short', iterations: 1000),
+      throwsArgumentError,
+    );
   });
 }

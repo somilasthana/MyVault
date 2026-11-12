@@ -21,10 +21,7 @@ class _AnimePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = VaultColors.cream,
-    );
+    canvas.drawRect(Offset.zero & size, Paint()..color = VaultColors.cream);
 
     void blob(Offset center, double radius, Color color) {
       canvas.drawCircle(center, radius, Paint()..color = color);
@@ -51,10 +48,30 @@ class _AnimePainter extends CustomPainter {
       const Color(0xFFE3D7FF),
     );
 
-    _star(canvas, Offset(size.width * 0.16, size.height * 0.07), 10, VaultColors.lemon);
-    _star(canvas, Offset(size.width * 0.9, size.height * 0.16), 8, VaultColors.pink);
-    _star(canvas, Offset(size.width * 0.08, size.height * 0.93), 8, VaultColors.cyan);
-    _star(canvas, Offset(size.width * 0.94, size.height * 0.86), 9, VaultColors.grape);
+    _star(
+      canvas,
+      Offset(size.width * 0.16, size.height * 0.07),
+      10,
+      VaultColors.lemon,
+    );
+    _star(
+      canvas,
+      Offset(size.width * 0.9, size.height * 0.16),
+      8,
+      VaultColors.pink,
+    );
+    _star(
+      canvas,
+      Offset(size.width * 0.08, size.height * 0.93),
+      8,
+      VaultColors.cyan,
+    );
+    _star(
+      canvas,
+      Offset(size.width * 0.94, size.height * 0.86),
+      9,
+      VaultColors.grape,
+    );
   }
 
   void _star(Canvas canvas, Offset center, double radius, Color color) {
@@ -148,7 +165,11 @@ class VaultMascot extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFFF9BC4), Color(0xFFFF4F93), Color(0xFFB388FF)],
+                  colors: [
+                    Color(0xFFFF9BC4),
+                    Color(0xFFFF4F93),
+                    Color(0xFFB388FF),
+                  ],
                 ),
                 borderRadius: BorderRadius.all(Radius.circular(34)),
                 border: Border.fromBorderSide(
@@ -160,11 +181,7 @@ class VaultMascot extends StatelessWidget {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _Eye(),
-                      SizedBox(width: 16),
-                      _Eye(),
-                    ],
+                    children: [_Eye(), SizedBox(width: 16), _Eye()],
                   ),
                   SizedBox(height: 8),
                   _Smile(),
@@ -214,9 +231,7 @@ class _Smile extends StatelessWidget {
       width: 22,
       height: 10,
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: VaultColors.ink, width: 3),
-        ),
+        border: Border(bottom: BorderSide(color: VaultColors.ink, width: 3)),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(12),
           bottomRight: Radius.circular(12),
@@ -398,6 +413,9 @@ class VaultField extends StatelessWidget {
     this.textInputAction,
     this.onSubmitted,
     this.autofillHints,
+    this.allowSuggestions = true,
+    this.showTooltip = 'Show password',
+    this.hideTooltip = 'Hide password',
     super.key,
   });
 
@@ -412,6 +430,9 @@ class VaultField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
   final Iterable<String>? autofillHints;
+  final bool allowSuggestions;
+  final String showTooltip;
+  final String hideTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -437,7 +458,7 @@ class VaultField extends StatelessWidget {
           onSubmitted: onSubmitted,
           autofillHints: autofillHints,
           autocorrect: false,
-          enableSuggestions: !obscure,
+          enableSuggestions: allowSuggestions && !obscure,
           cursorColor: VaultColors.pink,
           style: const TextStyle(
             fontSize: 18,
@@ -453,14 +474,19 @@ class VaultField extends StatelessWidget {
             suffixIcon: onToggleObscure == null
                 ? null
                 : IconButton(
-                    tooltip: obscure ? 'Show password' : 'Hide password',
+                    tooltip: obscure ? showTooltip : hideTooltip,
                     onPressed: onToggleObscure,
                     icon: Icon(
-                      obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                      obscure
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
                       color: VaultColors.ink,
                     ),
                   ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
             enabledBorder: _border(VaultColors.ink),
             focusedBorder: _border(VaultColors.pink),
             errorBorder: _border(VaultColors.pinkDeep),
@@ -471,7 +497,11 @@ class VaultField extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             helper!,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF6E5684), height: 1.3),
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF6E5684),
+              height: 1.3,
+            ),
           ),
         ],
       ],

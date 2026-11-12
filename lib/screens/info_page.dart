@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:myvault/data/vault_copy.dart';
 import 'package:myvault/widgets/vault_widgets.dart';
 
 class InfoPage extends StatelessWidget {
@@ -24,7 +25,11 @@ class InfoPage extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             title,
-            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, height: 1.05),
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              height: 1.05,
+            ),
           ),
           const SizedBox(height: 16),
           for (final paragraph in paragraphs) ...[
@@ -41,7 +46,7 @@ const helpPage = InfoPage(
   title: 'Ask for help',
   paragraphs: [
     'MyVault has no support team and no cloud account that can reset a password.',
-    'The master password lives in your head. If you saved myvault.json to your own Google Drive, you can open that file and read it back yourself. Do not share this master password with anyone.',
+    'The master password lives in your head. $neverShareAssetsNotice',
     'Deleting the account removes the account and every asset on this phone. A file already saved in Drive stays where you put it. A new install does not restore assets.',
   ],
 );
@@ -49,8 +54,8 @@ const helpPage = InfoPage(
 const termsPage = InfoPage(
   title: 'Terms of service',
   paragraphs: [
-    'MyVault is a personal vault that stays on your phone. You are responsible for the master password and for any myvault.json you save. Do not share this master password with anyone.',
-    'There is no warranty. Do not share the backup file if you want the password to stay private, because that file contains it.',
+    'MyVault is a personal vault that stays on your phone. You are responsible for the master password and for any myvault.json you save. $neverShareAssetsNotice',
+    'There is no warranty. $neverShareAssetsNotice',
   ],
 );
 
@@ -58,7 +63,7 @@ const privacyPage = InfoPage(
   title: 'Privacy policy',
   paragraphs: [
     'Nothing is sent to a MyVault server, because there is not one. Your email and a scrambled form of your master password are stored on this phone.',
-    'If you choose Save to Drive, myvault.json is written to a Google Drive folder you pick. That file contains your email and master password in plain text so you can read them back. Do not share this master password with anyone. Assets are not in that file.',
+    'If you choose Save to Drive, myvault.json is written to a Google Drive folder you pick. $neverShareAssetsNotice Assets are not in that file.',
     'Google Drive is your own storage. MyVault does not keep a copy.',
   ],
 );

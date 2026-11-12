@@ -3,6 +3,7 @@ import 'package:myvault/app/vault_app.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/screens/asset_form_screen.dart';
 import 'package:myvault/screens/asset_view_screen.dart';
+import 'package:myvault/screens/share_asset_flow.dart';
 import 'package:myvault/theme/vault_theme.dart';
 import 'package:myvault/widgets/vault_kind_icon.dart';
 import 'package:myvault/widgets/vault_widgets.dart';
@@ -55,7 +56,10 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
               onPressed: () => Navigator.pop(context, true),
               child: const Text(
                 'Yes',
-                style: TextStyle(color: VaultColors.pinkDeep, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: VaultColors.pinkDeep,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -85,7 +89,10 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
                 Expanded(
                   child: Text(
                     item.title,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -104,7 +111,10 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
                   padding: const EdgeInsets.all(12),
                   child: Text(
                     item.password,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -120,22 +130,31 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
             onTap: () => _open(AssetFormScreen(existing: item)),
           ),
           _Action(
-            icon: _showPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+            icon: _showPassword
+                ? Icons.visibility_off_rounded
+                : Icons.visibility_rounded,
             label: _showPassword ? 'Hide password' : 'Show password',
             onTap: () => setState(() => _showPassword = !_showPassword),
           ),
           _Action(
             icon: Icons.copy_rounded,
             label: 'Copy password',
-            onTap: () => copyVaultValue(context, item.password, 'Password copied'),
+            onTap: () =>
+                copyVaultValue(context, item.password, 'Password copied'),
           ),
           _Action(
             icon: Icons.copy_rounded,
             label: 'Copy username',
             enabled: item.hasUsername,
             onTap: item.hasUsername
-                ? () => copyVaultValue(context, item.username, 'Username copied')
+                ? () =>
+                      copyVaultValue(context, item.username, 'Username copied')
                 : null,
+          ),
+          _Action(
+            icon: Icons.ios_share_rounded,
+            label: 'Export',
+            onTap: () => exportVaultItem(context, item),
           ),
           _Action(
             icon: Icons.delete_outline_rounded,
@@ -176,7 +195,11 @@ class _Action extends StatelessWidget {
       leading: Icon(icon, color: color),
       title: Text(
         label,
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: color),
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
       onTap: enabled ? onTap : null,
     );

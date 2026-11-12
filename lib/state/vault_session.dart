@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:myvault/data/account_repository.dart';
 import 'package:myvault/data/credential_backup.dart';
+import 'package:myvault/data/shared_asset.dart';
+import 'package:myvault/data/shared_asset_gateway.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/vault_repository.dart';
 
@@ -9,10 +11,15 @@ class VaultSession extends ChangeNotifier {
     required this.accounts,
     required this.vaults,
     CredentialBackup? backup,
-  }) : _backup = backup ?? DriveCredentialBackup();
+    SharedAssetGateway? sharing,
+    this.shareIterations = defaultShareIterations,
+  }) : _backup = backup ?? DriveCredentialBackup(),
+       sharing = sharing ?? SystemSharedAssetGateway();
 
   final AccountRepository accounts;
   final CredentialBackup _backup;
+  final SharedAssetGateway sharing;
+  final int shareIterations;
   final VaultRepository vaults;
 
   bool busy = false;

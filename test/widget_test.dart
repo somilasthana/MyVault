@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myvault/app/vault_app.dart';
@@ -5,6 +8,10 @@ import 'package:myvault/data/account_repository.dart';
 import 'package:myvault/data/credential_backup.dart';
 import 'package:myvault/data/key_value_store.dart';
 import 'package:myvault/data/password_hasher.dart';
+import 'package:myvault/data/shared_asset.dart';
+import 'package:myvault/data/shared_asset_gateway.dart';
+import 'package:myvault/data/vault_copy.dart';
+import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/vault_repository.dart';
 import 'package:myvault/data/vault_store.dart';
 import 'package:myvault/state/vault_session.dart';
@@ -16,11 +23,19 @@ void main() {
     const hasher = PasswordHasher(iterations: 1000);
     final digest = await hasher.hash('sunshine-8');
     expect(
-      await hasher.verify(password: 'sunshine-8', salt: digest.salt, hash: digest.hash),
+      await hasher.verify(
+        password: 'sunshine-8',
+        salt: digest.salt,
+        hash: digest.hash,
+      ),
       isTrue,
     );
     expect(
-      await hasher.verify(password: 'sunshine-9', salt: digest.salt, hash: digest.hash),
+      await hasher.verify(
+        password: 'sunshine-9',
+        salt: digest.salt,
+        hash: digest.hash,
+      ),
       isFalse,
     );
   });
@@ -36,7 +51,9 @@ void main() {
     expect(json, contains('"kind": "myvault-credentials"'));
   });
 
-  testWidgets('login offers create and delete, and hides import', (tester) async {
+  testWidgets('login offers create and delete, and hides import', (
+    tester,
+  ) async {
     await _pumpVault(tester);
     expect(find.text('MyVault'), findsOneWidget);
     expect(find.text('Delete account?'), findsOneWidget);
@@ -46,7 +63,9 @@ void main() {
     expect(find.text('Forgot master password?'), findsNothing);
   });
 
-  testWidgets('options keep vault switches and drop offline and diagnostics', (tester) async {
+  testWidgets('options keep vault switches and drop offline and diagnostics', (
+    tester,
+  ) async {
     await _pumpVault(tester);
     await tester.tap(find.byTooltip('Options'));
     await tester.pumpAndSettle();
@@ -64,10 +83,13 @@ void main() {
 
     await tester.tap(find.text('Privacy policy'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('plain text'), findsOneWidget);
+    expect(find.textContaining('plain text'), findsNothing);
+    expect(find.textContaining(neverShareAssetsNotice), findsOneWidget);
   });
 
-  testWidgets('create account stores locally and can skip drive', (tester) async {
+  testWidgets('create account stores locally and can skip drive', (
+    tester,
+  ) async {
     final backup = _RecordingBackup();
     await _pumpVault(tester, backup: backup);
 
@@ -75,15 +97,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Let's enable your vault journey"), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('create-email')), 'not-an-email');
+    await tester.enterText(
+      find.byKey(const Key('create-email')),
+      'not-an-email',
+    );
     await tester.enterText(find.byKey(const Key('create-password')), 'short');
     await tester.tap(find.byKey(const Key('create-button')));
     await tester.pump();
     expect(find.text('Enter an email address.'), findsOneWidget);
     expect(find.text('Use at least 8 characters.'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('create-email')), 'Somi@Example.com');
-    await tester.enterText(find.byKey(const Key('create-password')), 'sunshine-8');
+    await tester.enterText(
+      find.byKey(const Key('create-email')),
+      'Somi@Example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('create-password')),
+      'sunshine-8',
+    );
     await tester.tap(find.byKey(const Key('create-button')));
     await tester.pumpAndSettle();
 
@@ -94,18 +125,27 @@ void main() {
 
     expect(find.text('My Asset Vault'), findsOneWidget);
     expect(find.text('My Items (0)'), findsOneWidget);
-    expect(find.textContaining('Remember your master password.'), findsOneWidget);
+    expect(
+      find.textContaining('Remember your master password.'),
+      findsOneWidget,
+    );
     expect(backup.calls, 0);
 
     await _logOut(tester);
     expect(find.text('somi@example.com'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('login-password')), 'wrong-password');
+    await tester.enterText(
+      find.byKey(const Key('login-password')),
+      'wrong-password',
+    );
     await tester.tap(find.byKey(const Key('login-button')));
     await tester.pumpAndSettle();
     expect(find.textContaining('does not match'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('login-password')), 'sunshine-8');
+    await tester.enterText(
+      find.byKey(const Key('login-password')),
+      'sunshine-8',
+    );
     await tester.tap(find.byKey(const Key('login-button')));
     await tester.pumpAndSettle();
     expect(find.text('My Asset Vault'), findsOneWidget);
@@ -116,13 +156,14 @@ void main() {
     await _pumpVault(tester, backup: backup);
     await _createAccount(tester);
 
+    expect(find.textContaining(neverShareAssetsNotice), findsOneWidget);
     await tester.tap(find.text('Save to Drive'));
     await tester.pumpAndSettle();
 
     expect(backup.calls, 1);
     expect(backup.email, 'somi@example.com');
     expect(backup.password, 'sunshine-8');
-    expect(find.textContaining('myvault.json saved'), findsOneWidget);
+    expect(find.text(neverShareAssetsNotice), findsOneWidget);
   });
 
   testWidgets('a second account is refused until delete', (tester) async {
@@ -134,11 +175,20 @@ void main() {
 
     await tester.tap(find.text('Create an account'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('create-email')), 'other@example.com');
-    await tester.enterText(find.byKey(const Key('create-password')), 'sunshine-8');
+    await tester.enterText(
+      find.byKey(const Key('create-email')),
+      'other@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('create-password')),
+      'sunshine-8',
+    );
     await tester.tap(find.byKey(const Key('create-button')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('This phone already has a vault'), findsOneWidget);
+    expect(
+      find.textContaining('This phone already has a vault'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
@@ -149,8 +199,14 @@ void main() {
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('login-email')), 'somi@example.com');
-    await tester.enterText(find.byKey(const Key('login-password')), 'sunshine-8');
+    await tester.enterText(
+      find.byKey(const Key('login-email')),
+      'somi@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('login-password')),
+      'sunshine-8',
+    );
     await tester.tap(find.byKey(const Key('login-button')));
     await tester.pumpAndSettle();
     expect(find.textContaining('does not have a vault'), findsOneWidget);
@@ -170,7 +226,9 @@ void main() {
     await tester.pumpAndSettle();
     await _logOut(tester);
 
-    final passwordField = tester.widget<TextField>(find.byKey(const Key('login-password')));
+    final passwordField = tester.widget<TextField>(
+      find.byKey(const Key('login-password')),
+    );
     expect(passwordField.controller?.text, 'sunshine-8');
   });
 
@@ -203,7 +261,10 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('asset-title')), 'Test Account');
+    await tester.enterText(
+      find.byKey(const Key('asset-title')),
+      'Test Account',
+    );
     await tester.tap(find.byKey(const Key('asset-save')));
     await tester.pumpAndSettle();
     expect(find.text('Missing Info'), findsOneWidget);
@@ -211,9 +272,18 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('asset-username')), 'somila@gmail.com');
-    await tester.enterText(find.byKey(const Key('asset-password')), 'password-1');
-    await tester.enterText(find.byKey(const Key('asset-notes')), 'locker hdfc code');
+    await tester.enterText(
+      find.byKey(const Key('asset-username')),
+      'somila@gmail.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('asset-password')),
+      'password-1',
+    );
+    await tester.enterText(
+      find.byKey(const Key('asset-notes')),
+      'locker hdfc code',
+    );
     await tester.tap(find.byKey(const Key('asset-save')));
     await tester.pumpAndSettle();
 
@@ -251,7 +321,10 @@ void main() {
     expect(find.text('locker hdfc code'), findsOneWidget);
     await tester.tap(find.byTooltip('Edit'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('asset-title')), 'Updated Account');
+    await tester.enterText(
+      find.byKey(const Key('asset-title')),
+      'Updated Account',
+    );
     await tester.tap(find.byKey(const Key('asset-save')));
     await tester.pumpAndSettle();
     expect(find.text('Updated Account'), findsOneWidget);
@@ -270,11 +343,108 @@ void main() {
     expect(find.text('Updated Account'), findsNothing);
     expect(find.text('My Items (0)'), findsOneWidget);
   });
+
+  testWidgets('export shares ciphertext and import adds another asset', (
+    tester,
+  ) async {
+    final session = await _pumpVault(tester);
+    final sharing = session.sharing as _MemorySharing;
+    await _createAccount(tester);
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+    await _saveAsset(tester);
+
+    await tester.tap(find.text('Test Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export'));
+    await tester.pumpAndSettle();
+
+    final keyField = tester.widget<TextField>(
+      find.byKey(const Key('export-key')),
+    );
+    expect(keyField.obscureText, isTrue);
+    expect(keyField.obscuringCharacter, '*');
+    await tester.enterText(find.byKey(const Key('export-key')), 'short');
+    await tester.tap(find.byKey(const Key('export-share')));
+    await tester.pump();
+    expect(find.text('Use at least 8 characters.'), findsOneWidget);
+    expect(find.text('Create Encrypt Key to share this asset'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('export-key')), 'share-key-1');
+    await tester.tap(find.byKey(const Key('export-share')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Export'), findsNothing);
+    expect(find.text('My Items (1)'), findsOneWidget);
+    expect(sharing.sharedName, 'Test Account.mvasset');
+    final shared = utf8.decode(sharing.sharedBytes!);
+    expect(shared, contains('"kind": "myvault-shared-item"'));
+    expect(shared, isNot(contains('password-1')));
+    expect(shared, isNot(contains('locker hdfc code')));
+    expect(shared, isNot(contains('share-key-1')));
+
+    sharing.nextFile = sharing.sharedBytes;
+    await tester.tap(find.byKey(const Key('import-asset')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Make sure the shared file is in Google Drive and you have the encryption key.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('import-key')), 'wrong-key-1');
+    await tester.tap(find.byKey(const Key('import-add')));
+    await tester.pumpAndSettle();
+    expect(find.text('That key did not open this file.'), findsOneWidget);
+    expect(find.text('Enter the key'), findsOneWidget);
+    expect(find.text('My Items (1)'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('import-key')), 'share-key-1');
+    await tester.tap(find.byKey(const Key('import-add')));
+    await tester.pumpAndSettle();
+    expect(find.text('locker hdfc code'), findsOneWidget);
+    expect(find.text('somila@gmail.com'), findsWidgets);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Items (2)'), findsOneWidget);
+    expect(find.text('Test Account'), findsNWidgets(2));
+
+    final secret = VaultItem(
+      id: 'note',
+      type: VaultItemType.secret,
+      title: 'Diary',
+      username: '',
+      password: '',
+      notes: 'quiet',
+      createdAt: DateTime.utc(2026, 1, 2),
+      updatedAt: DateTime.utc(2026, 1, 2),
+    );
+    sharing.nextFile = await sealSharedItem(
+      item: secret,
+      key: 'share-key-1',
+      iterations: 1000,
+    );
+    await tester.tap(find.byKey(const Key('import-asset')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('import-key')), 'share-key-1');
+    await tester.tap(find.byKey(const Key('import-add')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Secure notes are coming in the next phase.'),
+      findsOneWidget,
+    );
+    expect(find.text('My Items (2)'), findsOneWidget);
+  });
 }
 
 Future<VaultSession> _pumpVault(
   WidgetTester tester, {
   CredentialBackup? backup,
+  SharedAssetGateway? sharing,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -287,6 +457,8 @@ Future<VaultSession> _pumpVault(
       hasher: const PasswordHasher(iterations: 1000),
     ),
     backup: backup ?? _RecordingBackup(),
+    sharing: sharing ?? _MemorySharing(),
+    shareIterations: 1000,
     vaults: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
   );
   await session.load();
@@ -305,10 +477,53 @@ Future<void> _logOut(WidgetTester tester) async {
 Future<void> _createAccount(WidgetTester tester) async {
   await tester.tap(find.text('Create an account'));
   await tester.pumpAndSettle();
-  await tester.enterText(find.byKey(const Key('create-email')), 'Somi@Example.com');
-  await tester.enterText(find.byKey(const Key('create-password')), 'sunshine-8');
+  await tester.enterText(
+    find.byKey(const Key('create-email')),
+    'Somi@Example.com',
+  );
+  await tester.enterText(
+    find.byKey(const Key('create-password')),
+    'sunshine-8',
+  );
   await tester.tap(find.byKey(const Key('create-button')));
   await tester.pumpAndSettle();
+}
+
+Future<void> _saveAsset(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('vault-new')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('+ Add Asset Item'));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byKey(const Key('asset-title')), 'Test Account');
+  await tester.enterText(
+    find.byKey(const Key('asset-username')),
+    'somila@gmail.com',
+  );
+  await tester.enterText(find.byKey(const Key('asset-password')), 'password-1');
+  await tester.enterText(
+    find.byKey(const Key('asset-notes')),
+    'locker hdfc code',
+  );
+  await tester.tap(find.byKey(const Key('asset-save')));
+  await tester.pumpAndSettle();
+}
+
+class _MemorySharing implements SharedAssetGateway {
+  Uint8List? sharedBytes;
+  String? sharedName;
+  Uint8List? nextFile;
+
+  @override
+  Future<Uint8List?> pickFile() async => nextFile;
+
+  @override
+  Future<void> shareFile({
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    sharedName = fileName;
+    sharedBytes = bytes;
+  }
 }
 
 class _RecordingBackup implements CredentialBackup {
@@ -317,7 +532,10 @@ class _RecordingBackup implements CredentialBackup {
   String? password;
 
   @override
-  Future<bool> save({required String email, required String masterPassword}) async {
+  Future<bool> save({
+    required String email,
+    required String masterPassword,
+  }) async {
     calls += 1;
     this.email = email;
     password = masterPassword;

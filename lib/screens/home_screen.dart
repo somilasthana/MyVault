@@ -3,6 +3,7 @@ import 'package:myvault/app/vault_app.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/screens/asset_form_screen.dart';
 import 'package:myvault/screens/item_actions_sheet.dart';
+import 'package:myvault/screens/share_asset_flow.dart';
 import 'package:myvault/screens/login_screen.dart';
 import 'package:myvault/theme/vault_theme.dart';
 import 'package:myvault/widgets/vault_kind_icon.dart';
@@ -39,13 +40,14 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onNew(String choice) {
     if (choice == 'secret') {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Secure notes are coming in the next phase.')),
+        const SnackBar(
+          content: Text('Secure notes are coming in the next phase.'),
+        ),
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const AssetFormScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const AssetFormScreen()));
   }
 
   @override
@@ -77,7 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
               const Spacer(),
               ListTile(
                 key: const Key('log-out'),
-                leading: const Icon(Icons.logout_rounded, color: VaultColors.ink),
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: VaultColors.ink,
+                ),
                 title: const Text(
                   'Log out',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
@@ -105,7 +110,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     'My Asset Vault',
                     maxLines: 2,
-                    style: TextStyle(fontSize: 26, height: 1.05, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 26,
+                      height: 1.05,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -141,7 +150,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 hintStyle: const TextStyle(color: Color(0xFFB89BC4)),
                 filled: true,
                 fillColor: Colors.white,
-                prefixIcon: const Icon(Icons.search_rounded, color: VaultColors.ink),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: VaultColors.ink,
+                ),
                 suffixIcon: _search.text.isEmpty
                     ? null
                     : IconButton(
@@ -150,9 +162,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           _search.clear();
                           setState(() {});
                         },
-                        icon: const Icon(Icons.close_rounded, color: VaultColors.ink),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: VaultColors.ink,
+                        ),
                       ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
                 enabledBorder: _searchBorder(VaultColors.ink),
                 focusedBorder: _searchBorder(VaultColors.pink),
               ),
@@ -201,17 +219,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                       child: Text(
                         'My Items (${visible.length})',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     Expanded(
                       child: visible.isEmpty
-                          ? _EmptyList(message: _emptyMessage(session.items, visible))
+                          ? _EmptyList(
+                              message: _emptyMessage(session.items, visible),
+                            )
                           : ScrollConfiguration(
-                              behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                              behavior: ScrollConfiguration.of(context)
+                                  .copyWith(scrollbars: false),
                               child: ListView.separated(
                                 physics: const AlwaysScrollableScrollPhysics(),
-                                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
                                 itemCount: visible.length,
                                 separatorBuilder: (_, _) => const Divider(
                                   height: 1,
@@ -230,25 +255,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       child: Row(
                                         children: [
-                                          VaultKindIcon(type: item.type, size: 44),
+                                          VaultKindIcon(
+                                            type: item.type,
+                                            size: 44,
+                                          ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   item.title,
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.w700,
                                                   ),
                                                 ),
                                                 Text(
-                                                  item.username.isEmpty ? ' ' : item.username,
+                                                  item.username.isEmpty
+                                                      ? ' '
+                                                      : item.username,
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     fontSize: 14,
                                                     color: Color(0xFF6E5684),
@@ -269,6 +302,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            StickerButton(
+              key: const Key('import-asset'),
+              label: 'Import',
+              background: Colors.white,
+              foreground: VaultColors.ink,
+              onPressed: () => importVaultItem(context),
+            ),
           ],
         ),
       ),
@@ -280,7 +321,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_filter == VaultFilter.secrets && _search.text.trim().isEmpty) {
       return 'No secret notes yet';
     }
-    if (all.isEmpty && _search.text.trim().isEmpty) return 'The shelves are empty';
+    if (all.isEmpty && _search.text.trim().isEmpty) {
+      return 'The shelves are empty';
+    }
     return 'Nothing matches';
   }
 }
@@ -388,7 +431,11 @@ class _FilterChip extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13),
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
@@ -414,7 +461,10 @@ class _EmptyList extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('✦', style: TextStyle(fontSize: 28, color: VaultColors.pink)),
+            const Text(
+              '✦',
+              style: TextStyle(fontSize: 28, color: VaultColors.pink),
+            ),
             const SizedBox(height: 8),
             Text(
               message,

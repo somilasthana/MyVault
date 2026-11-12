@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:myvault/app/vault_app.dart';
 import 'package:myvault/data/account_repository.dart';
+import 'package:myvault/data/vault_copy.dart';
 import 'package:myvault/screens/home_screen.dart';
 import 'package:myvault/screens/login_screen.dart';
 import 'package:myvault/theme/vault_theme.dart';
@@ -74,7 +75,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         return AlertDialog(
           title: const Text('Save your master credentials?'),
           content: const Text(
-            'You will store your master credentials on Google Drive. myvault.json will be saved in a folder you choose.\n\nThe file contains your master password in plain text. Do not share this master password with anyone.\n\nA new install starts from scratch and ignores an older myvault.json. Saving again into the same place replaces the old file. Assets are not stored in that file.',
+            'You will store your master credentials on Google Drive. myvault.json will be saved in a folder you choose.\n\n$neverShareAssetsNotice\n\nA new install starts from scratch and ignores an older myvault.json. Saving again into the same place replaces the old file. Assets are not stored in that file.',
           ),
           actions: [
             TextButton(
@@ -91,20 +92,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     );
     if (!mounted) return;
 
-    var notice =
-        'Vault created on this phone. Remember your master password.';
+    var notice = 'Vault created on this phone. Remember your master password.';
     if (save == true) {
       try {
         final saved = await session.saveCredentials(
           email: email.trim().toLowerCase(),
           masterPassword: password,
         );
-        notice = saved
-            ? 'myvault.json saved. Do not share this master password with anyone.'
-            : 'Drive save was cancelled. The account is on this phone. Remember your master password.';
+        notice = saved ? neverShareAssetsNotice : 'Drive save was cancelled. The account is on this phone. Remember your master password.';
       } catch (_) {
-        notice =
-            'Could not open the save dialog. The account is on this phone. Remember your master password.';
+        notice = 'Could not open the save dialog. The account is on this phone. Remember your master password.';
       }
     }
     if (!mounted) return;
@@ -161,7 +158,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               obscure: _hidePassword,
               error: _passwordError,
               helper: 'At least 8 characters. Stars hide it, and you keep it in your head.',
-              onToggleObscure: () => setState(() => _hidePassword = !_hidePassword),
+              onToggleObscure: () =>
+                  setState(() => _hidePassword = !_hidePassword),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _create(),
               autofillHints: const [AutofillHints.newPassword],
@@ -175,7 +173,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             ),
             const SizedBox(height: 8),
             TextButton(
-              onPressed: session.busy ? null : () => Navigator.of(context).pop(),
+              onPressed: session.busy
+                  ? null
+                  : () => Navigator.of(context).pop(),
               child: const Text(
                 'Log in instead',
                 style: TextStyle(
