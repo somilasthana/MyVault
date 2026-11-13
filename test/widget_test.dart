@@ -12,6 +12,8 @@ import 'package:myvault/data/shared_asset.dart';
 import 'package:myvault/data/shared_asset_gateway.dart';
 import 'package:myvault/data/vault_copy.dart';
 import 'package:myvault/data/vault_item.dart';
+import 'package:myvault/data/note_reminders.dart';
+import 'package:myvault/data/reminder_date.dart';
 import 'package:myvault/data/vault_repository.dart';
 import 'package:myvault/data/vault_store.dart';
 import 'package:myvault/state/vault_session.dart';
@@ -306,7 +308,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('filter-secret')));
     await tester.pump();
-    expect(find.text('No secret notes yet'), findsOneWidget);
+    expect(find.text('No secure notes yet'), findsOneWidget);
     await tester.tap(find.byKey(const Key('filter-all')));
     await tester.pump();
 
@@ -433,11 +435,216 @@ void main() {
     await tester.enterText(find.byKey(const Key('import-key')), 'share-key-1');
     await tester.tap(find.byKey(const Key('import-add')));
     await tester.pumpAndSettle();
+    expect(find.text('quiet'), findsOneWidget);
+    expect(find.text('Diary'), findsWidgets);
+    expect(find.text('Show password'), findsNothing);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('My Items (3)'), findsOneWidget);
+    expect(find.text('Diary'), findsOneWidget);
+  });
+
+  testWidgets('a secure note saves, searches, and reminds on a chosen day', (
+    tester,
+  ) async {
+    await _pumpVault(tester);
+    await _createAccount(tester);
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+    await _saveAsset(tester);
+
+    await tester.tap(find.byKey(const Key('vault-new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add Secure Note'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notification'), findsOneWidget);
+    expect(find.textContaining('10:00 AM local time'), findsOneWidget);
+    expect(find.text('Folder'), findsNothing);
+    expect(find.textContaining('Attachments'), findsNothing);
     expect(
-      find.text('Secure notes are coming in the next phase.'),
+      tester.widget<TextField>(find.byKey(const Key('note-body'))).minLines,
+      4,
+    );
+    expect(find.text('Save'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('note-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Missing Information'), findsOneWidget);
+    expect(find.text('Title is mandatory.'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('note-body')),
+      'change locker details',
+    );
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Missing Information'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('note-body')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('note-body')), '');
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('vault-new')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('vault-new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add Secure Note'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('note-title')), 'Bank errand');
+    await tester.enterText(
+      find.byKey(const Key('note-body')),
+      'change locker details\nsecond line',
+    );
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Do you want to save?'), findsOneWidget);
+    await tester.tap(find.text('No'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bank errand'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('vault-new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add Secure Note'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('note-title')), 'Bank errand');
+    await tester.enterText(
+      find.byKey(const Key('note-body')),
+      'change locker details\nsecond line',
+    );
+
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    await tester.tap(find.byKey(const Key('note-reminder')));
+    await tester.pumpAndSettle();
+    expect(find.text(reminderMonthTitle(start)), findsOneWidget);
+    await tester.tap(find.byKey(const Key('reminder-next-month')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(reminderMonthTitle(DateTime(start.year, start.month + 1))),
       findsOneWidget,
     );
+    await tester.tap(find.byKey(const Key('reminder-prev-month')));
+    await tester.pumpAndSettle();
+    if (start.day > 1) {
+      final past = tester.widget<InkWell>(
+        find.byKey(
+          Key(
+            'reminder-day-${reminderDateKey(DateTime(start.year, start.month, 1))}',
+          ),
+        ),
+      );
+      expect(past.onTap, isNull);
+    }
+    expect(
+      tester
+          .widget<InkWell>(
+            find.byKey(Key('reminder-day-${reminderDateKey(start)}')),
+          )
+          .onTap,
+      isNotNull,
+    );
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('reminder-month')), findsNothing);
+    expect(
+      tester.widget<Switch>(find.byKey(const Key('note-reminder'))).value,
+      isFalse,
+    );
+
+    final future = _futureReminderDay(start);
+    await tester.tap(find.byKey(const Key('note-reminder')));
+    await tester.pumpAndSettle();
+    if (future.month != start.month || future.year != start.year) {
+      await tester.tap(find.byKey(const Key('reminder-next-month')));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(
+      find.byKey(Key('reminder-day-${reminderDateKey(future)}')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(reminderTriggerLine(future)), findsOneWidget);
+    expect(
+      tester.widget<Switch>(find.byKey(const Key('note-reminder'))).value,
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const Key('note-reminder-line')));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(find.text(reminderTriggerLine(future)), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('note-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bank errand'), findsOneWidget);
+    expect(find.text('change locker details'), findsOneWidget);
+    expect(find.text('second line'), findsNothing);
     expect(find.text('My Items (2)'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('search-assets')), 'second');
+    await tester.pump();
+    expect(find.text('Bank errand'), findsOneWidget);
+    expect(find.text('Test Account'), findsNothing);
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('filter-secret')));
+    await tester.pump();
+    expect(find.text('Bank errand'), findsOneWidget);
+    expect(find.text('Test Account'), findsNothing);
+    await tester.tap(find.byKey(const Key('filter-assets')));
+    await tester.pump();
+    expect(find.text('Test Account'), findsOneWidget);
+    expect(find.text('Bank errand'), findsNothing);
+    await tester.tap(find.byKey(const Key('filter-all')));
+    await tester.pump();
+
+    await tester.tap(find.text('Bank errand'));
+    await tester.pumpAndSettle();
+    expect(find.text('Show password'), findsNothing);
+    expect(find.text('View'), findsOneWidget);
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Export'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    await tester.tap(find.text('Export'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create Encrypt Key to share this asset'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('second line'), findsOneWidget);
+    expect(find.text(reminderTriggerLine(future)), findsOneWidget);
+    expect(find.text('Password'), findsNothing);
+  });
+
+  testWidgets('a refused notification permission turns the reminder off', (
+    tester,
+  ) async {
+    await _pumpVault(tester, reminders: MemoryNoteReminders(allow: false));
+    await _createAccount(tester);
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('vault-new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add Secure Note'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('note-reminder')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Notifications are off in phone settings.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('reminder-month')), findsNothing);
+    expect(
+      tester.widget<Switch>(find.byKey(const Key('note-reminder'))).value,
+      isFalse,
+    );
   });
 }
 
@@ -445,6 +652,7 @@ Future<VaultSession> _pumpVault(
   WidgetTester tester, {
   CredentialBackup? backup,
   SharedAssetGateway? sharing,
+  NoteReminders? reminders,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -460,6 +668,8 @@ Future<VaultSession> _pumpVault(
     sharing: sharing ?? _MemorySharing(),
     shareIterations: 1000,
     vaults: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
+    notes: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
+    reminders: reminders,
   );
   await session.load();
   await tester.pumpWidget(VaultApp(session: session));
@@ -506,6 +716,12 @@ Future<void> _saveAsset(WidgetTester tester) async {
   );
   await tester.tap(find.byKey(const Key('asset-save')));
   await tester.pumpAndSettle();
+}
+
+DateTime _futureReminderDay(DateTime today) {
+  final last = DateTime(today.year, today.month + 1, 0).day;
+  if (today.day < last) return DateTime(today.year, today.month, last);
+  return DateTime(today.year, today.month + 1, 1);
 }
 
 class _MemorySharing implements SharedAssetGateway {

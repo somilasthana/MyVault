@@ -9,6 +9,8 @@ import 'package:myvault/data/password_generator.dart';
 import 'package:myvault/data/shared_asset.dart';
 import 'package:myvault/data/password_hasher.dart';
 import 'package:myvault/data/vault_item.dart';
+import 'package:myvault/data/note_reminders.dart';
+import 'package:myvault/data/reminder_date.dart';
 import 'package:myvault/data/vault_repository.dart';
 import 'package:myvault/data/vault_store.dart';
 import 'package:myvault/state/vault_session.dart';
@@ -175,6 +177,7 @@ void main() {
         hasher: const PasswordHasher(iterations: 1000),
       ),
       vaults: VaultRepository(store: store, iterations: 1000),
+      notes: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
     );
     await session.createAccount(
       email: 'somi@example.com',
@@ -237,6 +240,7 @@ void main() {
       username: '',
       password: '',
       notes: 'quiet',
+      reminderDate: '2026-12-01',
       createdAt: DateTime.utc(2026, 1, 2),
       updatedAt: DateTime.utc(2026, 1, 2),
     );
@@ -245,14 +249,167 @@ void main() {
       key: 'share-key-1',
       iterations: 1000,
     );
-    expect(
-      await openSharedItem(bytes: sealedSecret, key: 'share-key-1'),
-      isA<SharedSecretContents>(),
+    final openedSecret = await openSharedItem(
+      bytes: sealedSecret,
+      key: 'share-key-1',
     );
+    expect(openedSecret, isA<SharedSecretContents>());
+    final secretContents = openedSecret as SharedSecretContents;
+    expect(secretContents.title, 'Diary');
+    expect(secretContents.notes, 'quiet');
+    expect(secretContents.reminderDate, '2026-12-01');
+    expect(utf8.decode(sealedSecret), isNot(contains('quiet')));
     expect(sharedItemFileName('A/B:C'), 'A B C.mvasset');
     await expectLater(
       sealSharedItem(item: item, key: 'short', iterations: 1000),
       throwsArgumentError,
+    );
+  });
+
+  test('secure notes live in their own file and remind at 10:00', () async {
+    final assetStore = MemoryVaultStore();
+    final noteStore = MemoryVaultStore();
+    final accounts = AccountRepository(
+      MemoryKeyValueStore(),
+      hasher: const PasswordHasher(iterations: 1000),
+    );
+    final reminders = MemoryNoteReminders(
+      clock: () => DateTime(2026, 11, 13, 15),
+    );
+    final session = VaultSession(
+      accounts: accounts,
+      vaults: VaultRepository(store: assetStore, iterations: 1000),
+      notes: VaultRepository(store: noteStore, iterations: 1000),
+      reminders: reminders,
+    );
+    await session.createAccount(
+      email: 'somi@example.com',
+      masterPassword: 'sunshine-8',
+    );
+    await session.saveItem(sample(id: 'asset', title: 'HDFC'));
+    await session.saveItem(
+      VaultItem(
+        id: 'today',
+        type: VaultItemType.secret,
+        title: 'Locker',
+        username: '',
+        password: '',
+        notes: 'change locker\nsecond line',
+        reminderDate: '2026-11-13',
+        createdAt: DateTime.utc(2026, 11, 1),
+        updatedAt: DateTime.utc(2026, 11, 1),
+      ),
+    );
+    await session.saveItem(
+      VaultItem(
+        id: 'later',
+        type: VaultItemType.secret,
+        title: 'Tax',
+        username: '',
+        password: '',
+        notes: 'papers',
+        reminderDate: '2026-11-20',
+        createdAt: DateTime.utc(2026, 11, 2),
+        updatedAt: DateTime.utc(2026, 11, 2),
+      ),
+    );
+    await session.saveItem(
+      VaultItem(
+        id: 'past',
+        type: VaultItemType.secret,
+        title: 'Old',
+        username: '',
+        password: '',
+        notes: 'done',
+        reminderDate: '2026-11-01',
+        createdAt: DateTime.utc(2026, 10, 1),
+        updatedAt: DateTime.utc(2026, 10, 1),
+      ),
+    );
+
+    expect(reminders.shown, ['today']);
+    expect(reminders.scheduled['later'], DateTime(2026, 11, 20, 10));
+    expect(reminders.scheduled.containsKey('past'), isFalse);
+    expect(reminders.scheduled.containsKey('today'), isFalse);
+    expect(noteListLine('change locker\nsecond line'), 'change locker');
+    expect(
+      visibleVaultItems(
+        items: session.items,
+        filter: VaultFilter.secrets,
+        query: 'second',
+      ).single.id,
+      'today',
+    );
+    expect(
+      visibleVaultItems(
+        items: session.items,
+        filter: VaultFilter.assets,
+        query: 'locker',
+      ),
+      isEmpty,
+    );
+
+    final assets = await VaultRepository(
+      store: assetStore,
+      iterations: 1000,
+    ).open('sunshine-8');
+    final notes = await VaultRepository(
+      store: noteStore,
+      iterations: 1000,
+    ).open('sunshine-8');
+    expect(assets.map((item) => item.id), ['asset']);
+    expect(notes.map((item) => item.id).toSet(), {'today', 'later', 'past'});
+    expect(await assetStore.read(), isNot(contains('change locker')));
+    expect(await noteStore.read(), isNot(contains('change locker')));
+
+    final morning = MemoryNoteReminders(clock: () => DateTime(2026, 11, 13, 9));
+    await morning.apply(notes.firstWhere((item) => item.id == 'today'));
+    expect(morning.shown, isEmpty);
+    expect(morning.scheduled['today'], DateTime(2026, 11, 13, 10));
+
+    await session.deleteItem('later');
+    expect(reminders.scheduled.containsKey('later'), isFalse);
+
+    final nextReminders = MemoryNoteReminders(
+      clock: () => DateTime(2026, 11, 13, 15),
+    );
+    final next = VaultSession(
+      accounts: accounts,
+      vaults: VaultRepository(store: assetStore, iterations: 1000),
+      notes: VaultRepository(store: noteStore, iterations: 1000),
+      reminders: nextReminders,
+    );
+    expect(
+      await next.login(email: 'somi@example.com', masterPassword: 'sunshine-8'),
+      LoginResult.success,
+    );
+    expect(nextReminders.shown, isEmpty);
+    expect(nextReminders.scheduled.containsKey('today'), isFalse);
+    expect(next.items.map((item) => item.type), contains(VaultItemType.secret));
+
+    await noteStore.write('not a vault');
+    final broken = VaultSession(
+      accounts: accounts,
+      vaults: VaultRepository(store: assetStore, iterations: 1000),
+      notes: VaultRepository(store: noteStore, iterations: 1000),
+    );
+    expect(
+      await broken.login(
+        email: 'somi@example.com',
+        masterPassword: 'sunshine-8',
+      ),
+      LoginResult.unreadable,
+    );
+    expect(broken.items, isEmpty);
+
+    final legacy = decodeVaultItems(
+      '{"version":1,"items":[{"id":"a","type":"asset","title":"HDFC","username":"u","password":"p","notes":"","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"}]}',
+    );
+    expect(legacy.single.reminderDate, isNull);
+    expect(formatReminderDate(DateTime(2026, 11, 20)), '20/11/2026');
+    expect(
+      reminderNotificationId('today') == reminderNotificationId('later'),
+      isFalse,
     );
   });
 }

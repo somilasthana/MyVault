@@ -3,6 +3,7 @@ import 'package:myvault/data/account_repository.dart';
 import 'package:myvault/data/credential_backup.dart';
 import 'package:myvault/data/shared_asset.dart';
 import 'package:myvault/data/shared_asset_gateway.dart';
+import 'package:myvault/data/note_reminders.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/vault_repository.dart';
 
@@ -10,10 +11,13 @@ class VaultSession extends ChangeNotifier {
   VaultSession({
     required this.accounts,
     required this.vaults,
+    required this.notes,
+    NoteReminders? reminders,
     CredentialBackup? backup,
     SharedAssetGateway? sharing,
     this.shareIterations = defaultShareIterations,
-  }) : _backup = backup ?? DriveCredentialBackup(),
+  }) : reminders = reminders ?? const NoopNoteReminders(),
+       _backup = backup ?? DriveCredentialBackup(),
        sharing = sharing ?? SystemSharedAssetGateway();
 
   final AccountRepository accounts;
@@ -21,6 +25,8 @@ class VaultSession extends ChangeNotifier {
   final SharedAssetGateway sharing;
   final int shareIterations;
   final VaultRepository vaults;
+  final VaultRepository notes;
+  final NoteReminders reminders;
 
   bool busy = false;
   bool hasAccount = false;
@@ -28,9 +34,14 @@ class VaultSession extends ChangeNotifier {
   bool rememberPassword = false;
   String? savedEmail;
   String? prefilledPassword;
-  List<VaultItem> _items = const [];
+  List<VaultItem> _assets = const [];
+  List<VaultItem> _notes = const [];
 
-  List<VaultItem> get items => List.unmodifiable(_items);
+  List<VaultItem> get items {
+    final next = [..._assets, ..._notes];
+    _sort(next);
+    return List.unmodifiable(next);
+  }
 
   Future<void> load() async {
     final snapshot = await accounts.read();
@@ -54,7 +65,8 @@ class VaultSession extends ChangeNotifier {
       );
       if (result == AccountWriteResult.created) {
         await load();
-        _setItems(await vaults.open(masterPassword));
+        _assets = await vaults.open(masterPassword);
+        _notes = await notes.open(masterPassword);
       }
       return result;
     });
@@ -73,8 +85,18 @@ class VaultSession extends ChangeNotifier {
       if (result != LoginResult.success) return result;
       await load();
       try {
-        _setItems(await vaults.open(masterPassword));
+        final assetItems = await vaults.open(masterPassword);
+        final noteItems = await notes.open(masterPassword);
+        _assets = assetItems;
+        _notes = noteItems;
+        try {
+          await reminders.sync(noteItems);
+        } catch (_) {}
       } on VaultUnreadable {
+        vaults.lock();
+        notes.lock();
+        _assets = const [];
+        _notes = const [];
         return LoginResult.unreadable;
       }
       return LoginResult.success;
@@ -82,29 +104,50 @@ class VaultSession extends ChangeNotifier {
   }
 
   Future<void> saveItem(VaultItem item) async {
-    final next = [..._items];
+    final secret = item.type == VaultItemType.secret;
+    final current = secret ? _notes : _assets;
+    final repo = secret ? notes : vaults;
+    final next = [...current];
     final index = next.indexWhere((entry) => entry.id == item.id);
     if (index >= 0) {
       next[index] = item;
     } else {
       next.add(item);
     }
-    _sort(next);
-    await vaults.persist(next);
-    _items = next;
+    await repo.persist(next);
+    if (secret) {
+      _notes = next;
+    } else {
+      _assets = next;
+    }
     notifyListeners();
+    if (!secret) return;
+    try {
+      await reminders.apply(item);
+    } catch (_) {}
   }
 
   Future<void> deleteItem(String id) async {
-    final next = _items.where((entry) => entry.id != id).toList();
-    await vaults.persist(next);
-    _items = next;
+    if (_notes.any((entry) => entry.id == id)) {
+      final next = _notes.where((entry) => entry.id != id).toList();
+      await notes.persist(next);
+      _notes = next;
+      try {
+        await reminders.cancel(id);
+      } catch (_) {}
+    } else if (_assets.any((entry) => entry.id == id)) {
+      final next = _assets.where((entry) => entry.id != id).toList();
+      await vaults.persist(next);
+      _assets = next;
+    }
     notifyListeners();
   }
 
   void lock() {
     vaults.lock();
-    _items = const [];
+    notes.lock();
+    _assets = const [];
+    _notes = const [];
     notifyListeners();
   }
 
@@ -129,16 +172,15 @@ class VaultSession extends ChangeNotifier {
   }
 
   Future<void> deleteAccount() async {
+    try {
+      await reminders.cancelAll();
+    } catch (_) {}
     await vaults.deleteAll();
-    _items = const [];
+    await notes.deleteAll();
+    _assets = const [];
+    _notes = const [];
     await accounts.deleteAccount();
     await load();
-  }
-
-  void _setItems(List<VaultItem> items) {
-    final next = [...items];
-    _sort(next);
-    _items = next;
   }
 
   void _sort(List<VaultItem> items) {

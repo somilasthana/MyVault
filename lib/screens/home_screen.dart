@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:myvault/app/vault_app.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/screens/asset_form_screen.dart';
+import 'package:myvault/screens/secure_note_form_screen.dart';
 import 'package:myvault/screens/item_actions_sheet.dart';
 import 'package:myvault/screens/share_asset_flow.dart';
 import 'package:myvault/screens/login_screen.dart';
@@ -38,16 +39,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onNew(String choice) {
-    if (choice == 'secret') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Secure notes are coming in the next phase.'),
-        ),
-      );
-      return;
-    }
-    Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => const AssetFormScreen()));
+    final screen = choice == 'secret'
+        ? const SecureNoteFormScreen()
+        : const AssetFormScreen();
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   @override
@@ -196,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 8),
                 _FilterChip(
                   chipKey: const Key('filter-secret'),
-                  label: 'Secret',
+                  label: 'Secure notes',
                   icon: Icons.sticky_note_2_rounded,
                   selected: _filter == VaultFilter.secrets,
                   onTap: () => setState(() => _filter = VaultFilter.secrets),
@@ -245,6 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 itemBuilder: (context, index) {
                                   final item = visible[index];
+                                  final subtitle = vaultListSubtitle(item);
                                   return InkWell(
                                     key: ValueKey(item.id),
                                     onTap: () => showItemActions(context, item),
@@ -276,9 +272,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   ),
                                                 ),
                                                 Text(
-                                                  item.username.isEmpty
+                                                  subtitle.isEmpty
                                                       ? ' '
-                                                      : item.username,
+                                                      : subtitle,
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
@@ -319,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _emptyMessage(List<VaultItem> all, List<VaultItem> visible) {
     if (visible.isNotEmpty) return '';
     if (_filter == VaultFilter.secrets && _search.text.trim().isEmpty) {
-      return 'No secret notes yet';
+      return 'No secure notes yet';
     }
     if (all.isEmpty && _search.text.trim().isEmpty) {
       return 'The shelves are empty';

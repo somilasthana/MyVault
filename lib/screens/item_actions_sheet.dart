@@ -3,6 +3,7 @@ import 'package:myvault/app/vault_app.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/screens/asset_form_screen.dart';
 import 'package:myvault/screens/asset_view_screen.dart';
+import 'package:myvault/screens/secure_note_form_screen.dart';
 import 'package:myvault/screens/share_asset_flow.dart';
 import 'package:myvault/theme/vault_theme.dart';
 import 'package:myvault/widgets/vault_kind_icon.dart';
@@ -74,6 +75,7 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final secret = item.type == VaultItemType.secret;
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView(
@@ -98,7 +100,7 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
               ],
             ),
           ),
-          if (_showPassword)
+          if (_showPassword && !secret)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: DecoratedBox(
@@ -127,30 +129,39 @@ class _ItemActionsSheetState extends State<ItemActionsSheet> {
           _Action(
             icon: Icons.edit_rounded,
             label: 'Edit',
-            onTap: () => _open(AssetFormScreen(existing: item)),
+            onTap: () => _open(
+              secret
+                  ? SecureNoteFormScreen(existing: item)
+                  : AssetFormScreen(existing: item),
+            ),
           ),
-          _Action(
-            icon: _showPassword
-                ? Icons.visibility_off_rounded
-                : Icons.visibility_rounded,
-            label: _showPassword ? 'Hide password' : 'Show password',
-            onTap: () => setState(() => _showPassword = !_showPassword),
-          ),
-          _Action(
-            icon: Icons.copy_rounded,
-            label: 'Copy password',
-            onTap: () =>
-                copyVaultValue(context, item.password, 'Password copied'),
-          ),
-          _Action(
-            icon: Icons.copy_rounded,
-            label: 'Copy username',
-            enabled: item.hasUsername,
-            onTap: item.hasUsername
-                ? () =>
-                      copyVaultValue(context, item.username, 'Username copied')
-                : null,
-          ),
+          if (!secret) ...[
+            _Action(
+              icon: _showPassword
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+              label: _showPassword ? 'Hide password' : 'Show password',
+              onTap: () => setState(() => _showPassword = !_showPassword),
+            ),
+            _Action(
+              icon: Icons.copy_rounded,
+              label: 'Copy password',
+              onTap: () =>
+                  copyVaultValue(context, item.password, 'Password copied'),
+            ),
+            _Action(
+              icon: Icons.copy_rounded,
+              label: 'Copy username',
+              enabled: item.hasUsername,
+              onTap: item.hasUsername
+                  ? () => copyVaultValue(
+                      context,
+                      item.username,
+                      'Username copied',
+                    )
+                  : null,
+            ),
+          ],
           _Action(
             icon: Icons.ios_share_rounded,
             label: 'Export',

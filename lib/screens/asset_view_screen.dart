@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:myvault/app/vault_app.dart';
+import 'package:myvault/data/reminder_date.dart';
+import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/screens/asset_form_screen.dart';
+import 'package:myvault/screens/secure_note_form_screen.dart';
 import 'package:myvault/theme/vault_theme.dart';
 import 'package:myvault/widgets/vault_kind_icon.dart';
 import 'package:myvault/widgets/vault_widgets.dart';
@@ -20,12 +23,16 @@ class _AssetViewScreenState extends State<AssetViewScreen> {
   @override
   Widget build(BuildContext context) {
     final session = VaultScope.of(context);
-    final item = session.items.where((entry) => entry.id == widget.itemId).firstOrNull;
+    final item = session.items
+        .where((entry) => entry.id == widget.itemId)
+        .firstOrNull;
     if (item == null) {
       return const AuthScaffold(child: SizedBox.shrink());
     }
 
-    final passwordText = _showPassword ? item.password : '*' * item.password.length;
+    final passwordText = _showPassword
+        ? item.password
+        : '*' * item.password.length;
     return AuthScaffold(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -44,9 +51,12 @@ class _AssetViewScreenState extends State<AssetViewScreen> {
                   tooltip: 'Edit',
                   icon: Icons.edit_rounded,
                   onPressed: () {
+                    final secret = item.type == VaultItemType.secret;
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => AssetFormScreen(existing: item),
+                        builder: (_) => secret
+                            ? SecureNoteFormScreen(existing: item)
+                            : AssetFormScreen(existing: item),
                       ),
                     );
                   },
@@ -56,7 +66,8 @@ class _AssetViewScreenState extends State<AssetViewScreen> {
             const SizedBox(height: 18),
             Expanded(
               child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                behavior: ScrollConfiguration.of(context)
+                    .copyWith(scrollbars: false),
                 child: ListView(
                   children: [
                     Row(
@@ -76,38 +87,82 @@ class _AssetViewScreenState extends State<AssetViewScreen> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    _DetailCard(
-                      label: 'Username',
-                      value: item.username,
-                      copyTooltip: 'Copy username',
-                      onCopy: item.hasUsername
-                          ? () => copyVaultValue(context, item.username, 'Username copied')
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    _DetailCard(
-                      label: 'Password',
-                      value: passwordText,
-                      copyTooltip: 'Copy password',
-                      onCopy: () => copyVaultValue(context, item.password, 'Password copied'),
-                      trailing: IconButton(
-                        tooltip: _showPassword ? 'Hide password' : 'Show password',
-                        onPressed: () => setState(() => _showPassword = !_showPassword),
-                        icon: Icon(
-                          _showPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          color: VaultColors.ink,
+                    if (item.type == VaultItemType.secret) ...[
+                      _DetailCard(
+                        label: 'Note',
+                        value: item.notes,
+                        copyTooltip: 'Copy note',
+                        onCopy: item.hasNotes
+                            ? () => copyVaultValue(
+                                context,
+                                item.notes,
+                                'Note copied',
+                              )
+                            : null,
+                      ),
+                      if (parseReminderDate(item.reminderDate) != null) ...[
+                        const SizedBox(height: 12),
+                        _DetailCard(
+                          label: 'Reminder',
+                          value: reminderTriggerLine(
+                            parseReminderDate(item.reminderDate)!,
+                          ),
+                          copyTooltip: '',
+                          onCopy: null,
+                          showCopy: false,
+                        ),
+                      ],
+                    ] else ...[
+                      _DetailCard(
+                        label: 'Username',
+                        value: item.username,
+                        copyTooltip: 'Copy username',
+                        onCopy: item.hasUsername
+                            ? () => copyVaultValue(
+                                context,
+                                item.username,
+                                'Username copied',
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      _DetailCard(
+                        label: 'Password',
+                        value: passwordText,
+                        copyTooltip: 'Copy password',
+                        onCopy: () => copyVaultValue(
+                          context,
+                          item.password,
+                          'Password copied',
+                        ),
+                        trailing: IconButton(
+                          tooltip: _showPassword
+                              ? 'Hide password'
+                              : 'Show password',
+                          onPressed: () =>
+                              setState(() => _showPassword = !_showPassword),
+                          icon: Icon(
+                            _showPassword
+                                ? Icons.visibility_off_rounded
+                                : Icons.visibility_rounded,
+                            color: VaultColors.ink,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    _DetailCard(
-                      label: 'Notes',
-                      value: item.notes,
-                      copyTooltip: 'Copy notes',
-                      onCopy: item.hasNotes
-                          ? () => copyVaultValue(context, item.notes, 'Notes copied')
-                          : null,
-                    ),
+                      const SizedBox(height: 12),
+                      _DetailCard(
+                        label: 'Notes',
+                        value: item.notes,
+                        copyTooltip: 'Copy notes',
+                        onCopy: item.hasNotes
+                            ? () => copyVaultValue(
+                                context,
+                                item.notes,
+                                'Notes copied',
+                              )
+                            : null,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -126,6 +181,7 @@ class _DetailCard extends StatelessWidget {
     required this.copyTooltip,
     required this.onCopy,
     this.trailing,
+    this.showCopy = true,
   });
 
   final String label;
@@ -133,6 +189,7 @@ class _DetailCard extends StatelessWidget {
   final String copyTooltip;
   final VoidCallback? onCopy;
   final Widget? trailing;
+  final bool showCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -163,20 +220,25 @@ class _DetailCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     value.isEmpty ? ' ' : value,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, height: 1.3),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),
             ),
             ?trailing,
-            IconButton(
-              tooltip: enabled ? copyTooltip : null,
-              onPressed: onCopy,
-              icon: Icon(
-                Icons.copy_rounded,
-                color: enabled ? VaultColors.grape : const Color(0xFFCBB8D6),
+            if (showCopy)
+              IconButton(
+                tooltip: enabled ? copyTooltip : null,
+                onPressed: onCopy,
+                icon: Icon(
+                  Icons.copy_rounded,
+                  color: enabled ? VaultColors.grape : const Color(0xFFCBB8D6),
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:myvault/data/reminder_date.dart';
+
 enum VaultItemType { asset, secret }
 
 enum VaultFilter { all, assets, secrets }
@@ -17,6 +19,7 @@ class VaultItem {
     required this.notes,
     required this.createdAt,
     required this.updatedAt,
+    this.reminderDate,
   });
 
   final String id;
@@ -27,6 +30,9 @@ class VaultItem {
   final String notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Local calendar day `yyyy-MM-dd`, or null when the note has no reminder.
+  final String? reminderDate;
 
   bool get hasUsername => username.trim().isNotEmpty;
 
@@ -42,6 +48,7 @@ class VaultItem {
       'notes': notes,
       'createdAt': createdAt.toUtc().toIso8601String(),
       'updatedAt': updatedAt.toUtc().toIso8601String(),
+      'reminderDate': ?reminderDate,
     };
   }
 
@@ -55,8 +62,28 @@ class VaultItem {
       notes: json['notes'] as String? ?? '',
       createdAt: DateTime.parse(json['createdAt'] as String).toUtc(),
       updatedAt: DateTime.parse(json['updatedAt'] as String).toUtc(),
+      reminderDate: _reminderField(json['reminderDate']),
     );
   }
+}
+
+String? _reminderField(Object? value) {
+  if (value is! String) return null;
+  return parseReminderDate(value) == null ? null : value;
+}
+
+/// First non-empty line of a secure note, for the vault list.
+String noteListLine(String notes) {
+  for (final raw in notes.split(RegExp(r'\r?\n'))) {
+    final line = raw.trim();
+    if (line.isNotEmpty) return line;
+  }
+  return '';
+}
+
+String vaultListSubtitle(VaultItem item) {
+  if (item.type == VaultItemType.secret) return noteListLine(item.notes);
+  return item.username;
 }
 
 String newVaultItemId() {
@@ -120,6 +147,13 @@ List<VaultItem> visibleVaultItems({
     return a.id.compareTo(b.id);
   });
   return visible;
+}
+
+enum NoteSaveBlock { none, missingTitle }
+
+NoteSaveBlock noteSaveBlock({required String title}) {
+  if (title.trim().isEmpty) return NoteSaveBlock.missingTitle;
+  return NoteSaveBlock.none;
 }
 
 AssetSaveBlock assetSaveBlock({
