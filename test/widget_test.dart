@@ -14,6 +14,7 @@ import 'package:myvault/data/vault_copy.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/note_reminders.dart';
 import 'package:myvault/data/reminder_date.dart';
+import 'package:myvault/data/vault_backup_gateway.dart';
 import 'package:myvault/data/vault_repository.dart';
 import 'package:myvault/data/vault_store.dart';
 import 'package:myvault/state/vault_session.dart';
@@ -646,6 +647,118 @@ void main() {
       isFalse,
     );
   });
+
+  testWidgets('backup and restore run from the menu', (tester) async {
+    final files = MemoryVaultBackupGateway();
+    final reminders = MemoryNoteReminders(
+      clock: () => DateTime(2026, 11, 13, 15),
+    );
+    final session = await _pumpVault(
+      tester,
+      backupFiles: files,
+      reminders: reminders,
+    );
+    await _createAccount(tester);
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+
+    await session.saveItem(
+      VaultItem(
+        id: 'asset-1',
+        type: VaultItemType.asset,
+        title: 'HDFC Card',
+        username: 'somi',
+        password: 'vault-secret-xyz',
+        notes: 'locker code',
+        createdAt: DateTime.utc(2026, 1, 1),
+        updatedAt: DateTime.utc(2026, 1, 1),
+      ),
+    );
+    await session.saveItem(
+      VaultItem(
+        id: 'note-1',
+        type: VaultItemType.secret,
+        title: 'Locker note',
+        username: '',
+        password: '',
+        notes: 'papers',
+        reminderDate: '2026-11-20',
+        createdAt: DateTime.utc(2026, 11, 2),
+        updatedAt: DateTime.utc(2026, 11, 2),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Open menu'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('backup-vault')), findsOneWidget);
+    expect(find.byKey(const Key('restore-vault')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('backup-vault')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('backup-password')), 'nope');
+    await tester.tap(find.byKey(const Key('backup-confirm')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('That master password does not match this phone.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('backup-password')),
+      'sunshine-8',
+    );
+    await tester.tap(find.byKey(const Key('backup-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('Backup saved.'), findsOneWidget);
+    expect(files.saved, isNotNull);
+
+    await session.deleteItem('asset-1');
+    await session.saveItem(
+      VaultItem(
+        id: 'local-1',
+        type: VaultItemType.asset,
+        title: 'Phone only',
+        username: 'me',
+        password: 'local-secret',
+        notes: '',
+        createdAt: DateTime.utc(2026, 6, 1),
+        updatedAt: DateTime.utc(2026, 6, 1),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('HDFC Card'), findsNothing);
+
+    files.nextPick = files.saved;
+    await tester.tap(find.byTooltip('Open menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('restore-vault')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('restore-password')),
+      'sunshine-8',
+    );
+    await tester.tap(find.byKey(const Key('restore-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Backup restored.'), findsOneWidget);
+    expect(find.text('HDFC Card'), findsOneWidget);
+    expect(find.text('Phone only'), findsOneWidget);
+    expect(find.text('Locker note'), findsOneWidget);
+    expect(reminders.scheduled['note-1'], DateTime(2026, 11, 20, 10));
+
+    files.nextPick = Uint8List.fromList(
+      utf8.encode('{"version":1,"kind":"myvault-credentials"}'),
+    );
+    await tester.tap(find.byTooltip('Open menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('restore-vault')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('This file is not an encrypted MyVault backup.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('restore-password')), findsNothing);
+  });
 }
 
 Future<VaultSession> _pumpVault(
@@ -653,6 +766,7 @@ Future<VaultSession> _pumpVault(
   CredentialBackup? backup,
   SharedAssetGateway? sharing,
   NoteReminders? reminders,
+  VaultBackupGateway? backupFiles,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -667,6 +781,7 @@ Future<VaultSession> _pumpVault(
     backup: backup ?? _RecordingBackup(),
     sharing: sharing ?? _MemorySharing(),
     shareIterations: 1000,
+    backupFiles: backupFiles,
     vaults: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
     notes: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
     reminders: reminders,

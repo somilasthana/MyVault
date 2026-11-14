@@ -8,6 +8,8 @@ import 'package:myvault/data/key_value_store.dart';
 import 'package:myvault/data/password_generator.dart';
 import 'package:myvault/data/shared_asset.dart';
 import 'package:myvault/data/password_hasher.dart';
+import 'package:myvault/data/vault_backup.dart';
+import 'package:myvault/data/vault_backup_gateway.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/note_reminders.dart';
 import 'package:myvault/data/reminder_date.dart';
@@ -411,5 +413,141 @@ void main() {
       reminderNotificationId('today') == reminderNotificationId('later'),
       isFalse,
     );
+  });
+
+  test('backup merges by id and restores future reminders', () async {
+    final files = MemoryVaultBackupGateway();
+    final reminders = MemoryNoteReminders(
+      clock: () => DateTime(2026, 11, 13, 15),
+    );
+    final session = VaultSession(
+      accounts: AccountRepository(
+        MemoryKeyValueStore(),
+        hasher: const PasswordHasher(iterations: 1000),
+      ),
+      vaults: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
+      notes: VaultRepository(store: MemoryVaultStore(), iterations: 1000),
+      reminders: reminders,
+      backupFiles: files,
+    );
+    await session.createAccount(
+      email: 'somi@example.com',
+      masterPassword: 'sunshine-8',
+    );
+    await session.saveItem(
+      sample(id: 'asset', title: 'HDFC', password: 'vault-secret-xyz'),
+    );
+    await session.saveItem(
+      VaultItem(
+        id: 'later',
+        type: VaultItemType.secret,
+        title: 'Tax',
+        username: '',
+        password: '',
+        notes: 'papers',
+        reminderDate: '2026-11-20',
+        createdAt: DateTime.utc(2026, 11, 2),
+        updatedAt: DateTime.utc(2026, 11, 2),
+      ),
+    );
+    await session.saveItem(
+      VaultItem(
+        id: 'past',
+        type: VaultItemType.secret,
+        title: 'Old',
+        username: '',
+        password: '',
+        notes: 'done',
+        reminderDate: '2026-11-01',
+        createdAt: DateTime.utc(2026, 10, 1),
+        updatedAt: DateTime.utc(2026, 10, 1),
+      ),
+    );
+
+    expect(
+      await session.saveBackup('wrong-password'),
+      VaultBackupSave.wrongPassword,
+    );
+    expect(files.saved, isNull);
+
+    expect(await session.saveBackup('sunshine-8'), VaultBackupSave.saved);
+    final saved = files.saved;
+    expect(saved, isNotNull);
+    final text = utf8.decode(saved!);
+    expect(text, contains('"kind": "myvault-backup"'));
+    expect(text, isNot(contains('vault-secret-xyz')));
+    expect(text, isNot(contains('papers')));
+    expect(text, isNot(contains('sunshine-8')));
+    expect(looksLikeVaultBackup(saved), isTrue);
+    expect(
+      looksLikeVaultBackup(
+        Uint8List.fromList(utf8.encode('{"kind":"myvault-credentials"}')),
+      ),
+      isFalse,
+    );
+
+    final again = await sealVaultBackup(
+      assets: session.items
+          .where((item) => item.type == VaultItemType.asset)
+          .toList(),
+      notes: session.items
+          .where((item) => item.type == VaultItemType.secret)
+          .toList(),
+      password: 'sunshine-8',
+      iterations: 1000,
+    );
+    expect(again, isNot(equals(saved)));
+
+    await session.saveItem(sample(id: 'asset', title: 'Changed locally'));
+    await session.saveItem(sample(id: 'local', title: 'Phone only'));
+    await session.deleteItem('later');
+    expect(session.items.map((item) => item.id), isNot(contains('later')));
+
+    files.acceptSave = false;
+    expect(await session.saveBackup('sunshine-8'), VaultBackupSave.cancelled);
+
+    expect(
+      await session.restoreBackup(
+        bytes: saved,
+        masterPassword: 'wrong-password',
+      ),
+      VaultBackupRestore.wrongPassword,
+    );
+    expect(session.items.map((item) => item.id), contains('local'));
+    expect(session.items.map((item) => item.id), isNot(contains('later')));
+
+    expect(
+      await session.restoreBackup(
+        bytes: Uint8List.fromList(utf8.encode('not a vault file')),
+        masterPassword: 'sunshine-8',
+      ),
+      VaultBackupRestore.notABackup,
+    );
+
+    expect(
+      await session.restoreBackup(bytes: saved, masterPassword: 'sunshine-8'),
+      VaultBackupRestore.restored,
+    );
+    expect(
+      await session.restoreBackup(bytes: saved, masterPassword: 'sunshine-8'),
+      VaultBackupRestore.restored,
+    );
+
+    final ids = session.items.map((item) => item.id).toList();
+    expect(ids.where((id) => id == 'asset'), hasLength(1));
+    expect(ids.where((id) => id == 'later'), hasLength(1));
+    expect(ids, contains('local'));
+    expect(ids, contains('past'));
+    expect(
+      session.items.firstWhere((item) => item.id == 'asset').title,
+      'HDFC',
+    );
+    expect(
+      session.items.firstWhere((item) => item.id == 'later').reminderDate,
+      '2026-11-20',
+    );
+    expect(reminders.scheduled['later'], DateTime(2026, 11, 20, 10));
+    expect(reminders.scheduled.containsKey('past'), isFalse);
+    expect(reminders.shown, isEmpty);
   });
 }

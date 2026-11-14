@@ -4,8 +4,14 @@ import 'package:myvault/data/credential_backup.dart';
 import 'package:myvault/data/shared_asset.dart';
 import 'package:myvault/data/shared_asset_gateway.dart';
 import 'package:myvault/data/note_reminders.dart';
+import 'package:myvault/data/vault_backup.dart';
+import 'package:myvault/data/vault_backup_gateway.dart';
 import 'package:myvault/data/vault_item.dart';
 import 'package:myvault/data/vault_repository.dart';
+
+enum VaultBackupSave { saved, cancelled, wrongPassword, locked, failed }
+
+enum VaultBackupRestore { restored, wrongPassword, notABackup, locked, failed }
 
 class VaultSession extends ChangeNotifier {
   VaultSession({
@@ -15,13 +21,16 @@ class VaultSession extends ChangeNotifier {
     NoteReminders? reminders,
     CredentialBackup? backup,
     SharedAssetGateway? sharing,
+    VaultBackupGateway? backupFiles,
     this.shareIterations = defaultShareIterations,
   }) : reminders = reminders ?? const NoopNoteReminders(),
        _backup = backup ?? DriveCredentialBackup(),
-       sharing = sharing ?? SystemSharedAssetGateway();
+       sharing = sharing ?? SystemSharedAssetGateway(),
+       _backupFiles = backupFiles ?? DriveVaultBackupGateway();
 
   final AccountRepository accounts;
   final CredentialBackup _backup;
+  final VaultBackupGateway _backupFiles;
   final SharedAssetGateway sharing;
   final int shareIterations;
   final VaultRepository vaults;
@@ -156,6 +165,72 @@ class VaultSession extends ChangeNotifier {
     required String masterPassword,
   }) {
     return _backup.save(email: email, masterPassword: masterPassword);
+  }
+
+  Future<VaultBackupSave> saveBackup(String masterPassword) async {
+    if (!vaults.isOpen || !notes.isOpen) return VaultBackupSave.locked;
+    try {
+      final matches = await accounts.passwordMatches(masterPassword);
+      if (!matches) return VaultBackupSave.wrongPassword;
+      final bytes = await sealVaultBackup(
+        assets: _assets,
+        notes: _notes,
+        password: masterPassword,
+        iterations: vaults.iterations,
+      );
+      final saved = await _backupFiles.save(bytes);
+      return saved ? VaultBackupSave.saved : VaultBackupSave.cancelled;
+    } catch (_) {
+      return VaultBackupSave.failed;
+    }
+  }
+
+  Future<Uint8List?> pickBackup() => _backupFiles.pick();
+
+  Future<VaultBackupRestore> restoreBackup({
+    required Uint8List bytes,
+    required String masterPassword,
+  }) async {
+    if (!vaults.isOpen || !notes.isOpen) return VaultBackupRestore.locked;
+    final opened = await openVaultBackup(
+      bytes: bytes,
+      password: masterPassword,
+    );
+    switch (opened) {
+      case RejectedBackup(:final wrongPassword):
+        return wrongPassword
+            ? VaultBackupRestore.wrongPassword
+            : VaultBackupRestore.notABackup;
+      case OpenedVaultBackup(:final backup):
+        final nextAssets = mergeVaultItems(
+          current: _assets,
+          incoming: backup.assets,
+        );
+        final nextNotes = mergeVaultItems(
+          current: _notes,
+          incoming: backup.notes,
+        );
+        try {
+          await vaults.persist(nextAssets);
+        } catch (_) {
+          return VaultBackupRestore.failed;
+        }
+        try {
+          await notes.persist(nextNotes);
+        } catch (_) {
+          try {
+            await vaults.persist(_assets);
+          } catch (_) {}
+          return VaultBackupRestore.failed;
+        }
+        _assets = nextAssets;
+        _notes = nextNotes;
+        notifyListeners();
+        try {
+          await reminders.sync(nextNotes);
+        } catch (_) {}
+        return VaultBackupRestore.restored;
+    }
   }
 
   Future<void> setRememberEmail(bool value) async {

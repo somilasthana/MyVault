@@ -84,7 +84,8 @@ class AccountRepository {
       return LoginResult.noAccount;
     }
     final emailMatches = storedEmail == email.trim().toLowerCase();
-    final passwordMatches = emailMatches &&
+    final passwordMatches =
+        emailMatches &&
         await _hasher.verify(password: masterPassword, salt: salt, hash: hash);
     if (!passwordMatches) return LoginResult.mismatch;
 
@@ -93,6 +94,13 @@ class AccountRepository {
       masterPassword: masterPassword,
     );
     return LoginResult.success;
+  }
+
+  Future<bool> passwordMatches(String masterPassword) async {
+    final salt = await _store.read(saltKey);
+    final hash = await _store.read(hashKey);
+    if (salt == null || hash == null) return false;
+    return _hasher.verify(password: masterPassword, salt: salt, hash: hash);
   }
 
   Future<void> setRememberEmail(bool value) {

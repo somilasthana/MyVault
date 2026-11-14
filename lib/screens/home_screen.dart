@@ -5,6 +5,7 @@ import 'package:myvault/screens/asset_form_screen.dart';
 import 'package:myvault/screens/secure_note_form_screen.dart';
 import 'package:myvault/screens/item_actions_sheet.dart';
 import 'package:myvault/screens/share_asset_flow.dart';
+import 'package:myvault/screens/vault_backup_flow.dart';
 import 'package:myvault/screens/login_screen.dart';
 import 'package:myvault/theme/vault_theme.dart';
 import 'package:myvault/widgets/vault_kind_icon.dart';
@@ -70,6 +71,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Menu',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
                 ),
+              ),
+              ListTile(
+                key: const Key('backup-vault'),
+                leading: const Icon(
+                  Icons.backup_rounded,
+                  color: VaultColors.ink,
+                ),
+                title: const Text(
+                  'Backup',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                onTap: () => backupVault(context),
+              ),
+              ListTile(
+                key: const Key('restore-vault'),
+                leading: const Icon(
+                  Icons.restore_rounded,
+                  color: VaultColors.ink,
+                ),
+                title: const Text(
+                  'Restore',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                onTap: () => restoreVault(context),
               ),
               const Spacer(),
               ListTile(

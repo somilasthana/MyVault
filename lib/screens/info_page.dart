@@ -47,14 +47,14 @@ const helpPage = InfoPage(
   paragraphs: [
     'MyVault has no support team and no cloud account that can reset a password.',
     'The master password lives in your head. $neverShareAssetsNotice',
-    'Deleting the account removes the account and every asset on this phone. A file already saved in Drive stays where you put it. A new install does not restore assets.',
+    'Deleting the account removes the account and every asset on this phone. Use Backup in the menu to save an encrypted backup.json into a Google Drive folder you pick. Restore merges that file back. Files already saved in Drive stay where you put them.',
   ],
 );
 
 const termsPage = InfoPage(
   title: 'Terms of service',
   paragraphs: [
-    'MyVault is a personal vault that stays on your phone. You are responsible for the master password and for any myvault.json you save. $neverShareAssetsNotice',
+    'MyVault is a personal vault that stays on your phone. You are responsible for the master password and for any myvault.json or backup.json you save. $neverShareAssetsNotice',
     'There is no warranty. $neverShareAssetsNotice',
   ],
 );
@@ -64,6 +64,7 @@ const privacyPage = InfoPage(
   paragraphs: [
     'Nothing is sent to a MyVault server, because there is not one. Your email and a scrambled form of your master password are stored on this phone.',
     'If you choose Save to Drive, myvault.json is written to a Google Drive folder you pick. $neverShareAssetsNotice Assets are not in that file.',
+    'If you choose Backup, backup.json is an encrypted copy of your assets and secure notes in a Google Drive folder you pick. The master password is not written into that file.',
     'Google Drive is your own storage. MyVault does not keep a copy.',
   ],
 );

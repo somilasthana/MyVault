@@ -47,9 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _openOptions() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const OptionsScreen()),
-    );
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const OptionsScreen()));
     if (!mounted) return;
     setState(_applyRememberedValues);
   }
@@ -59,7 +58,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _email.text.trim();
     final password = _password.text;
     final emailError = validateEmail(email);
-    final passwordError = password.isEmpty ? 'Enter your master password.' : null;
+    final passwordError = password.isEmpty
+        ? 'Enter your master password.'
+        : null;
     setState(() {
       _emailError = emailError;
       _passwordError = passwordError;
@@ -75,11 +76,13 @@ class _LoginScreenState extends State<LoginScreen> {
         openHome(context);
       case LoginResult.noAccount:
         setState(() {
-          _formError = 'Create an account first. This phone does not have a vault yet.';
+          _formError =
+              'Create an account first. This phone does not have a vault yet.';
         });
       case LoginResult.mismatch:
         setState(() {
-          _formError = 'That email or master password does not match this phone.';
+          _formError =
+              'That email or master password does not match this phone.';
         });
       case LoginResult.unreadable:
         setState(() {
@@ -101,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return AlertDialog(
           title: const Text('Delete this account?'),
           content: const Text(
-            'This removes the account and every asset stored on this phone. That cannot be undone. myvault.json stays in the folder where you saved it until you delete that file yourself.',
+            'This removes the account and every asset stored on this phone. That cannot be undone. myvault.json and backup.json stay in the folders where you saved them until you delete those files yourself.',
           ),
           actions: [
             TextButton(
@@ -138,7 +141,9 @@ class _LoginScreenState extends State<LoginScreen> {
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 32,
+              ),
               child: IntrinsicHeight(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,7 +260,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               : () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute<void>(
-                                      builder: (_) => const CreateAccountScreen(),
+                                      builder: (_) =>
+                                          const CreateAccountScreen(),
                                     ),
                                   );
                                 },
